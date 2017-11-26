@@ -1,0 +1,1 @@
+This directory holds the pong implementation of project 3. This program utilizes the given assests as well some created for the project.
