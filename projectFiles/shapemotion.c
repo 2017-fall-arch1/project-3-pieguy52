@@ -13,12 +13,40 @@
 #include <p2switches.h>
 #include <shape.h>
 #include <abCircle.h>
-
+ 
 #define GREEN_LED BIT6
+
+AbRect paddle1 = {abRectGetBounds, abRectCheck, {10,1}}; //10 x 1 rectangle
+AbRect paddle2 = {abRectGetBounds, abRectCheck, {10,1}};
+AbRect net = {abRectGetBounds, abRectCheck, {(screenWidth-20), 1}};
 
 AbRectOutline fieldOutline = {	/* playing field */
   abRectOutlineGetBounds, abRectOutlineCheck,   
-  {screenWidth/2 - 5, screenHeight/2 - 5}
+  {screenWidth/2 - 1, screenHeight/2 - 1}
+};
+
+Layer netLayer = {
+  (AbShape *)&net,
+  {(screenWidth/2), (screenHeight/2)},
+  {0,0}, {0,0},
+  COLOR_WHITE,
+  0
+};
+
+Layer layer3 = {
+  (AbShape *)&paddle2,
+  {(screenWidth/2), (5)},
+  {0,0}, {0,0},
+  COLOR_WHITE,
+  &netLayer
+};
+
+Layer layer2 = {
+  (AbShape *)&paddle1,
+  {(screenWidth/2), (screenHeight-5)},
+  {0,0}, {0,0},
+  COLOR_WHITE,
+  &layer3
 };
  
 Layer fieldLayer = {		/* playing field as a layer */
@@ -26,10 +54,10 @@ Layer fieldLayer = {		/* playing field as a layer */
   {screenWidth/2, screenHeight/2},/**< center */
  {0,0}, {0,0},				    /* last & next pos */
  COLOR_WHITE,
- 0
+ &layer2
 };
 
-Layer layer3 = {
+Layer layer0 = {
   (AbShape *)&circle4,
   {(screenWidth/2)+10, (screenHeight/2)+5},
   {0,0}, {0,0},
@@ -48,7 +76,7 @@ typedef struct MovLayer_s {
 } MovLayer;
 
 /* initial value of {0,0} will be overwritten */
-MovLayer ml3 = { &layer3, {1,1}, 0 }; /**< not all layers move */
+MovLayer ml0 = { &layer0, {1,1}, 0 }; /**< not all layers move */
 
 void movLayerDraw(MovLayer *movLayers, Layer *layers)
 {
@@ -137,8 +165,8 @@ void main()
 
   shapeInit();
 
-  layerInit(&layer3);
-  layerDraw(&layer3);
+  layerInit(&layer0);
+  layerDraw(&layer0);
 
 
   layerGetBounds(&fieldLayer, &fieldFence);
@@ -155,7 +183,7 @@ void main()
     }
     P1OUT |= GREEN_LED;       /**< Green led on when CPU on */
     redrawScreen = 0;
-    movLayerDraw(&ml3, &layer3);
+    movLayerDraw(&ml0, &layer0);
   }
 }
 
@@ -166,7 +194,7 @@ void wdt_c_handler()
   P1OUT |= GREEN_LED;		      /**< Green LED on when cpu on */
   count ++;
   if (count == 15) {
-    mlAdvance(&ml3, &fieldFence);
+    mlAdvance(&ml0, &fieldFence);
     if (p2sw_read())
       redrawScreen = 1;
     count = 0;
