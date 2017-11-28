@@ -18,7 +18,7 @@
 
 AbRect paddle1 = {abRectGetBounds, abRectCheck, {10,1}}; //10 x 1 rectangle
 AbRect paddle2 = {abRectGetBounds, abRectCheck, {10,1}};
-AbRect net = {abRectGetBounds, abRectCheck, {(screenWidth-20), 1}};
+AbRect net = {abRectGetBounds, abRectCheck, {62, 1}};
 
 AbRectOutline fieldOutline = {	/* playing field */
   abRectOutlineGetBounds, abRectOutlineCheck,   
@@ -76,7 +76,9 @@ typedef struct MovLayer_s {
 } MovLayer;
 
 /* initial value of {0,0} will be overwritten */
-MovLayer ml0 = { &layer0, {1,1}, 0 }; /**< not all layers move */
+MovLayer ml3 = {&layer3, {3,0}, 0};
+MovLayer ml2 = {&layer2, {3,0}, &ml3};
+MovLayer ml0 = {&layer0, {1,1}, &ml2}; /**< not all layers move */
 
 void movLayerDraw(MovLayer *movLayers, Layer *layers)
 {
@@ -133,8 +135,7 @@ void mlAdvance(MovLayer *ml, Region *fence)
     vec2Add(&newPos, &ml->layer->posNext, &ml->velocity);
     abShapeGetBounds(ml->layer->abShape, &newPos, &shapeBoundary);
     for (axis = 0; axis < 2; axis ++) {
-      if ((shapeBoundary.topLeft.axes[axis] < fence->topLeft.axes[axis]) ||
-	  (shapeBoundary.botRight.axes[axis] > fence->botRight.axes[axis]) ) {
+      if ((shapeBoundary.topLeft.axes[axis] < fence->topLeft.axes[axis]) ||					   (shapeBoundary.botRight.axes[axis] > fence->botRight.axes[axis]) ) {
 	int velocity = ml->velocity.axes[axis] = -ml->velocity.axes[axis];
 	newPos.axes[axis] += (2*velocity);
       }	/**< if outside of fence */
@@ -161,13 +162,12 @@ void main()
   configureClocks();
   lcd_init();
   shapeInit();
-  p2sw_init(1);
+  p2sw_init(15);
 
   shapeInit();
 
   layerInit(&layer0);
   layerDraw(&layer0);
-
 
   layerGetBounds(&fieldLayer, &fieldFence);
 
@@ -191,11 +191,20 @@ void main()
 void wdt_c_handler()
 {
   static short count = 0;
+  u_int switchVal = p2sw_read();
   P1OUT |= GREEN_LED;		      /**< Green LED on when cpu on */
   count ++;
   if (count == 15) {
     mlAdvance(&ml0, &fieldFence);
-    if (p2sw_read())
+    if(~switchVal & 1)
+      redrawScreen = 0;
+    else if(~switchVal & 2)
+      redrawScreen = 0;
+    else if(~switchVal & 4)
+      redrawScreen = 0;
+    else if(~switchVal & 8)
+      redrawScreen = 0;
+    else
       redrawScreen = 1;
     count = 0;
   } 
