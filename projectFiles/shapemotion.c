@@ -16,6 +16,11 @@
  
 #define GREEN_LED BIT6
 
+char b1 = 0;
+char b2 = 0;
+char b3 = 0;
+char b4 = 0;
+
 AbRect paddle1 = {abRectGetBounds, abRectCheck, {10,1}}; //10 x 1 rectangle
 AbRect paddle2 = {abRectGetBounds, abRectCheck, {10,1}};
 AbRect net = {abRectGetBounds, abRectCheck, {62, 1}};
@@ -56,6 +61,7 @@ Layer fieldLayer = {		/* playing field as a layer */
  COLOR_WHITE,
  &layer2
 };
+
 
 Layer layer0 = {
   (AbShape *)&circle4,
@@ -126,22 +132,74 @@ void movLayerDraw(MovLayer *movLayers, Layer *layers)
  *  \param ml The moving shape to be advanced
  *  \param fence The region which will serve as a boundary for ml
  */
-void mlAdvance(MovLayer *ml, Region *fence)
-{
+void mlAdvance(MovLayer *ball, MovLayer *paddle1, MovLayer *paddle2, Region *fence){
   Vec2 newPos;
   u_char axis;
   Region shapeBoundary;
-  for (; ml; ml = ml->next) {
-    vec2Add(&newPos, &ml->layer->posNext, &ml->velocity);
-    abShapeGetBounds(ml->layer->abShape, &newPos, &shapeBoundary);
-    for (axis = 0; axis < 2; axis ++) {
-      if ((shapeBoundary.topLeft.axes[axis] < fence->topLeft.axes[axis]) ||					   (shapeBoundary.botRight.axes[axis] > fence->botRight.axes[axis]) ) {
-	int velocity = ml->velocity.axes[axis] = -ml->velocity.axes[axis];
-	newPos.axes[axis] += (2*velocity);
-      }	/**< if outside of fence */
-    } /**< for axis */
-    ml->layer->posNext = newPos;
-  } /**< for ml */
+  if(b1 || b2 || b3 || b4){
+    if(b1){
+      vec2Add(&newPos, &paddle1->layer->posNext, &paddle1->velocity);
+      abShapeGetBounds(paddle1->layer->abShape, &newPos, &shapeBoundary);
+      if((shapeBoundary.topLeft.axes[0] < fence->topLeft.axes[0]) ||
+	 (shapeBoundary.botRight.axes[0] > fence->botRight.axes[0])){
+        int velocity = paddle1->velocity.axes[0] = -paddle1->velocity.axes[0];
+	newPos.axes[0] += (2*velocity);
+      }
+      paddle1->layer->posNext = newPos;
+    }else if(b2){
+      paddle1->velocity.axes[0] = -paddle1->velocity.axes[0];
+      vec2Add(&newPos, &paddle1->layer->posNext, &paddle1->velocity);
+      abShapeGetBounds(paddle1->layer->abShape, &newPos, &shapeBoundary);
+      if((shapeBoundary.topLeft.axes[0] < fence->topLeft.axes[0]) ||
+	 (shapeBoundary.botRight.axes[0] > fence->botRight.axes[0])){
+	int velocity = paddle1->velocity.axes[0] = -paddle1->velocity.axes[0];
+	newPos.axes[0] += (2*velocity);
+      }
+      paddle1->layer->posNext = newPos;
+    }else if(b3){
+      vec2Add(&newPos, &paddle2->layer->posNext, &paddle2->velocity);
+      abShapeGetBounds(paddle2->layer->abShape, &newPos, &shapeBoundary);
+      if((shapeBoundary.topLeft.axes[0] < fence->topLeft.axes[0]) ||
+	 (shapeBoundary.botRight.axes[0] > fence->botRight.axes[0])){
+	int velocity = paddle2->velocity.axes[0] = -paddle2->velocity.axes[0];
+	newPos.axes[0] += (2*velocity);
+      }
+      paddle2->layer->posNext = newPos;
+    }else if(b4){
+      paddle2->velocity.axes[0] = -paddle2->velocity.axes[0];
+      vec2Add(&newPos, &paddle2->layer->posNext, &paddle2->velocity);
+      abShapeGetBounds(paddle2->layer->abShape, &newPos, &shapeBoundary);
+      if((shapeBoundary.topLeft.axes[0] < fence->topLeft.axes[0]) ||
+	 (shapeBoundary.botRight.axes[0] > fence->botRight.axes[0])){
+	int velocity = paddle2->velocity.axes[0] = -paddle2->velocity.axes[0];
+	newPos.axes[0] += (2*velocity);
+      }
+      paddle2->layer->posNext = newPos;
+    }
+    
+  }
+  
+  vec2Add(&newPos, &ball->layer->posNext, &ball->velocity);
+  abShapeGetBounds(ball->layer->abShape, &newPos, &shapeBoundary);
+  
+  for (axis = 0; axis < 2; axis ++) {
+    if(!axis){//axes is 1, Y axis
+      if((shapeBoundary.topLeft.axes[axis] < fence->topLeft.axes[axis]) ||
+	 (shapeBoundary.botRight.axes[axis] > fence->botRight.axes[axis])){
+      int velocity = ball->velocity.axes[axis] = -ball->velocity.axes[axis];
+      newPos.axes[axis] += (2*velocity);
+      }
+    }else{//axes is 0, X axis
+      if((shapeBoundary.topLeft.axes[axis] < fence->topLeft.axes[axis]) ||
+	 (shapeBoundary.botRight.axes[axis] > fence->botRight.axes[axis])){
+	newPos.axes[0] = (screenWidth/2)+10;
+	newPos.axes[1] = (screenHeight/2)+5;
+      }
+    }
+  } /**< for axis */
+
+  ball->layer->posNext = newPos;
+
 }
 
 
@@ -171,7 +229,8 @@ void main()
 
   layerGetBounds(&fieldLayer, &fieldFence);
 
-
+  char* str = "0 - 0";
+  
   enableWDTInterrupts();      /**< enable periodic interrupt */
   or_sr(0x8);	              /**< GIE (enable interrupts) */
 
@@ -184,6 +243,7 @@ void main()
     P1OUT |= GREEN_LED;       /**< Green led on when CPU on */
     redrawScreen = 0;
     movLayerDraw(&ml0, &layer0);
+    drawString5x7((screenWidth/2 - 12),(screenHeight/2 - 10), str, COLOR_WHITE, COLOR_BLACK);
   }
 }
 
@@ -193,19 +253,29 @@ void wdt_c_handler()
   static short count = 0;
   u_int switchVal = p2sw_read();
   P1OUT |= GREEN_LED;		      /**< Green LED on when cpu on */
-  count ++;
+  count++;
   if (count == 15) {
-    mlAdvance(&ml0, &fieldFence);
-    if(~switchVal & 1)
-      redrawScreen = 0;
-    else if(~switchVal & 2)
-      redrawScreen = 0;
-    else if(~switchVal & 4)
-      redrawScreen = 0;
-    else if(~switchVal & 8)
-      redrawScreen = 0;
-    else
+     mlAdvance(&ml0, &ml2, &ml3, &fieldFence);
+     if(~switchVal & 1){
       redrawScreen = 1;
+      b2 = b3 = b4 = 0;
+      b1 = 1;
+     }else if(~switchVal & 2){
+      redrawScreen = 1;
+      b1 = b3 = b4 = 0;
+      b2 = 1;
+     }else if(~switchVal & 4){
+      redrawScreen = 1;
+      b1 = b2 = b4 = 0;
+      b3 = 1;
+     }else if(~switchVal & 8){
+      redrawScreen = 1;
+      b1 = b2 = b3 = 0;
+      b4 = 1;
+     }else{
+       redrawScreen = 1;
+      b1 = b2 = b3 = b4 = 0;
+     }
     count = 0;
   } 
   P1OUT &= ~GREEN_LED;		    /**< Green LED off when cpu off */
