@@ -1,3 +1,4 @@
+
 /** \file shapemotion.c
  *  \brief This is a simple shape motion demo.
  *  This demo creates two layers containing shapes.
@@ -5,7 +6,8 @@
  *  While the CPU is running the green LED is on, and
  *  when the screen does not need to be redrawn the CPU
  *  is turned off along with the green LED.
- */  
+ */
+#include <stdio.h>
 #include <msp430.h>
 #include <libTimer.h>
 #include <lcdutils.h>
@@ -20,6 +22,10 @@ char b1 = 0;
 char b2 = 0;
 char b3 = 0;
 char b4 = 0;
+
+char* str = "0 - 0";
+char p1Score = 0;
+char p2Score = 0;
 
 AbRect paddle1 = {abRectGetBounds, abRectCheck, {10,1}}; //10 x 1 rectangle
 AbRect paddle2 = {abRectGetBounds, abRectCheck, {10,1}};
@@ -133,9 +139,9 @@ void movLayerDraw(MovLayer *movLayers, Layer *layers)
  *  \param fence The region which will serve as a boundary for ml
  */
 void mlAdvance(MovLayer *ball, MovLayer *paddle1, MovLayer *paddle2, Region *fence){
-  Vec2 newPos;
+  Vec2 newPos, p1Pos, p2Pos;
   u_char axis;
-  Region shapeBoundary;
+  Region shapeBoundary, p1Boundary, p2Boundary;
   if(b1 || b2 || b3 || b4){
     if(b1){
       vec2Add(&newPos, &paddle1->layer->posNext, &paddle1->velocity);
@@ -178,14 +184,34 @@ void mlAdvance(MovLayer *ball, MovLayer *paddle1, MovLayer *paddle2, Region *fen
     }
     
   }
-  
+  //moves ball
   vec2Add(&newPos, &ball->layer->posNext, &ball->velocity);
   abShapeGetBounds(ball->layer->abShape, &newPos, &shapeBoundary);
+  //gets paddle1 pos
+  abShapeGetBounds(paddle1->layer->abShape, &paddle1->layer->pos, &p1Boundary);
+  //moves paddle2 pos
+  abShapeGetBounds(paddle2->layer->abShape, &paddle2->layer->pos, &p2Boundary);
+
+  //half way point of the ball
+  int half = (shapeBoundary.topLeft.axes[0] + shapeBoundary.botRight.axes[0])/2;
   
   for (axis = 0; axis < 2; axis ++) {
     if(!axis){//axes is 1, Y axis
-      if((shapeBoundary.topLeft.axes[axis] < fence->topLeft.axes[axis]) ||
-	 (shapeBoundary.botRight.axes[axis] > fence->botRight.axes[axis])){
+      if(half >= p1Boundary.topLeft.axes[0] &&
+	 half <= p1Boundary.botRight.axes[0] &&
+	 shapeBoundary.botRight.axes[1] > p1Boundary.topLeft.axes[1]){
+	int velocity = ball->velocity.axes[1] = -ball->velocity.axes[1];
+	newPos.axes[1] += (2*velocity);
+      }else if(half >= p2Boundary.topLeft.axes[0] &&
+	       half <= p2Boundary.botRight.axes[0] &&
+	       shapeBoundary.botRight.axes[1] > p2Boundary.topLeft.axes[1]){
+	int velocity = ball->velocity.axes[1] = -ball->velocity.axes[1];
+	newPos.axes[1] += (2*velocity);
+      }else if((shapeBoundary.topLeft.axes[axis] < fence->topLeft.axes[axis]) ||
+	 (shapeBoundary.botRight.axes[axis] > fence->botRight.axes[axis]) ||
+	 (half >= p2Boundary.topLeft.axes[0] && half <= p2Boundary.botRight.axes[0]
+	  && shapeBoundary.botRight.axes[1] > p1Boundary.topLeft.axes[1])
+	 ){
       int velocity = ball->velocity.axes[axis] = -ball->velocity.axes[axis];
       newPos.axes[axis] += (2*velocity);
       }
@@ -194,12 +220,14 @@ void mlAdvance(MovLayer *ball, MovLayer *paddle1, MovLayer *paddle2, Region *fen
 	 (shapeBoundary.botRight.axes[axis] > fence->botRight.axes[axis])){
 	newPos.axes[0] = (screenWidth/2)+10;
 	newPos.axes[1] = (screenHeight/2)+5;
+	p1Score++;
       }
     }
   } /**< for axis */
 
   ball->layer->posNext = newPos;
-
+  //sprintf(str, "%d - %d", &p1Score, &p2Score);
+  drawString5x7((screenWidth/2 - 12), (screenHeight/2 - 10), str, COLOR_WHITE, COLOR_BLACK);
 }
 
 
@@ -228,8 +256,6 @@ void main()
   layerDraw(&layer0);
 
   layerGetBounds(&fieldLayer, &fieldFence);
-
-  char* str = "0 - 0";
   
   enableWDTInterrupts();      /**< enable periodic interrupt */
   or_sr(0x8);	              /**< GIE (enable interrupts) */
@@ -243,7 +269,6 @@ void main()
     P1OUT |= GREEN_LED;       /**< Green led on when CPU on */
     redrawScreen = 0;
     movLayerDraw(&ml0, &layer0);
-    drawString5x7((screenWidth/2 - 12),(screenHeight/2 - 10), str, COLOR_WHITE, COLOR_BLACK);
   }
 }
 
