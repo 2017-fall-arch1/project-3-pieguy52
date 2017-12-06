@@ -1,4 +1,3 @@
-
 /** \file shapemotion.c
  *  \brief This is a simple shape motion demo.
  *  This demo creates two layers containing shapes.
@@ -8,6 +7,8 @@
  *  is turned off along with the green LED.
  */
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <msp430.h>
 #include <libTimer.h>
 #include <lcdutils.h>
@@ -23,7 +24,6 @@ char b2 = 0;
 char b3 = 0;
 char b4 = 0;
 
-char* str = "0 - 0";
 char p1Score = 0;
 char p2Score = 0;
 
@@ -90,7 +90,16 @@ typedef struct MovLayer_s {
 /* initial value of {0,0} will be overwritten */
 MovLayer ml3 = {&layer3, {3,0}, 0};
 MovLayer ml2 = {&layer2, {3,0}, &ml3};
-MovLayer ml0 = {&layer0, {1,1}, &ml2}; /**< not all layers move */
+MovLayer ml0 = {&layer0, {2,2}, &ml2}; /**< not all layers move */
+
+void buzzer(){
+  for(int i = 0; i < 1000; i++){
+    CCR0 = 1000;
+    CCR1 = 1000 >> 5;
+  }
+  CCR0 = 0;
+  CCR1 = 0;
+}
 
 void movLayerDraw(MovLayer *movLayers, Layer *layers)
 {
@@ -139,9 +148,13 @@ void movLayerDraw(MovLayer *movLayers, Layer *layers)
  *  \param fence The region which will serve as a boundary for ml
  */
 void mlAdvance(MovLayer *ball, MovLayer *paddle1, MovLayer *paddle2, Region *fence){
-  Vec2 newPos, p1Pos, p2Pos;
+  Vec2 newPos;
   u_char axis;
   Region shapeBoundary, p1Boundary, p2Boundary;
+  char* score1[2];
+  char* score2[2];
+  itoa(p1Score, score1, 10);
+  itoa(p2Score, score2, 10);
   if(b1 || b2 || b3 || b4){
     if(b1){
       vec2Add(&newPos, &paddle1->layer->posNext, &paddle1->velocity);
@@ -182,8 +195,8 @@ void mlAdvance(MovLayer *ball, MovLayer *paddle1, MovLayer *paddle2, Region *fen
       }
       paddle2->layer->posNext = newPos;
     }
-    
   }
+  
   //moves ball
   vec2Add(&newPos, &ball->layer->posNext, &ball->velocity);
   abShapeGetBounds(ball->layer->abShape, &newPos, &shapeBoundary);
@@ -202,11 +215,13 @@ void mlAdvance(MovLayer *ball, MovLayer *paddle1, MovLayer *paddle2, Region *fen
 	 shapeBoundary.botRight.axes[1] > p1Boundary.topLeft.axes[1]){
 	int velocity = ball->velocity.axes[1] = -ball->velocity.axes[1];
 	newPos.axes[1] += (2*velocity);
+	buzzer();
       }else if(half >= p2Boundary.topLeft.axes[0] &&
 	       half <= p2Boundary.botRight.axes[0] &&
-	       shapeBoundary.botRight.axes[1] > p2Boundary.topLeft.axes[1]){
+	       shapeBoundary.topLeft.axes[1] < p2Boundary.botRight.axes[1]){
 	int velocity = ball->velocity.axes[1] = -ball->velocity.axes[1];
 	newPos.axes[1] += (2*velocity);
+	buzzer();
       }else if((shapeBoundary.topLeft.axes[axis] < fence->topLeft.axes[axis]) ||
 	 (shapeBoundary.botRight.axes[axis] > fence->botRight.axes[axis]) ||
 	 (half >= p2Boundary.topLeft.axes[0] && half <= p2Boundary.botRight.axes[0]
@@ -214,20 +229,24 @@ void mlAdvance(MovLayer *ball, MovLayer *paddle1, MovLayer *paddle2, Region *fen
 	 ){
       int velocity = ball->velocity.axes[axis] = -ball->velocity.axes[axis];
       newPos.axes[axis] += (2*velocity);
+      buzzer();
       }
     }else{//axes is 0, X axis
-      if((shapeBoundary.topLeft.axes[axis] < fence->topLeft.axes[axis]) ||
-	 (shapeBoundary.botRight.axes[axis] > fence->botRight.axes[axis])){
-	newPos.axes[0] = (screenWidth/2)+10;
-	newPos.axes[1] = (screenHeight/2)+5;
+      if(shapeBoundary.topLeft.axes[axis] < fence->topLeft.axes[axis]){
+	newPos.axes[0] = (screenWidth/2) + 10;
+	newPos.axes[1] = (screenHeight/2) + 5;
 	p1Score++;
+      }else if(shapeBoundary.botRight.axes[axis] > fence->botRight.axes[axis]){
+	newPos.axes[0] = (screenWidth/2) + 10;
+	newPos.axes[1] = (screenHeight/2) + 5;
+	p2Score++;
       }
     }
   } /**< for axis */
-
+  
   ball->layer->posNext = newPos;
-  //sprintf(str, "%d - %d", &p1Score, &p2Score);
-  drawString5x7((screenWidth/2 - 12), (screenHeight/2 - 10), str, COLOR_WHITE, COLOR_BLACK);
+  drawString5x7((screenWidth/2 - 12), (screenHeight/2 - 10), score1, COLOR_WHITE, COLOR_BLACK);
+  drawString5x7((screenWidth/2 + 12), (screenHeight/2 - 10), score2, COLOR_WHITE, COLOR_BLACK);
 }
 
 
@@ -245,6 +264,12 @@ void main()
   P1DIR |= GREEN_LED;		/**< Green led on when CPU on */		
   P1OUT |= GREEN_LED;
 
+  timerAUpmode(); //init of buzzer
+  P2SEL2 &= ~(BIT6 | BIT7);
+  P2SEL &= ~BIT7;
+  P2SEL |= BIT6;
+  P2DIR = BIT6;
+  
   configureClocks();
   lcd_init();
   shapeInit();
@@ -260,6 +285,7 @@ void main()
   enableWDTInterrupts();      /**< enable periodic interrupt */
   or_sr(0x8);	              /**< GIE (enable interrupts) */
 
+  char* str = "-";
 
   for(;;) { 
     while (!redrawScreen) { /**< Pause CPU if screen doesn't need updating */
@@ -269,6 +295,7 @@ void main()
     P1OUT |= GREEN_LED;       /**< Green led on when CPU on */
     redrawScreen = 0;
     movLayerDraw(&ml0, &layer0);
+    drawString5x7((screenWidth/2), (screenHeight/2 - 10), str, COLOR_WHITE, COLOR_BLACK); 
   }
 }
 
